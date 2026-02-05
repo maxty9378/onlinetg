@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Задание 2 • Тренер ТСПП</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --tg-bg: var(--tg-theme-bg-color, #0a0a0a);
+            --tg-text: var(--tg-theme-text-color, #ffffff);
+            --tg-hint: var(--tg-theme-hint-color, #8e8e93);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-bg);
+            color: var(--tg-text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .container {
+            padding: 16px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+        }
+        .header {
+            padding: 0 0 16px;
+            margin-bottom: 16px;
+        }
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--tg-text);
+        }
+
+        /* Блоки статусов — как в макете */
+        .status-block {
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .status-block.checked {
+            background: #2d554a;
+        }
+        .status-block.checked .status-title { color: #64dd72; }
+        .status-block.awaiting {
+            background: #5c2f32;
+        }
+        .status-block.awaiting .status-title { color: #f76868; }
+        .status-block.fixing {
+            background: #614a2d;
+        }
+        .status-block.fixing .status-title { color: #ffaa00; }
+        .status-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .status-employees {
+            color: var(--tg-text);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .status-employees .emp-line {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .status-employees .emp-line:last-child { margin-bottom: 0; }
+
+        /* Кнопка Выбрать сотрудника */
+        .btn-select {
+            display: block;
+            width: 100%;
+            background: #00b080;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        .btn-select:active { opacity: 0.9; }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--tg-hint);
+        }
+        .error-block {
+            background: #5c2f32;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .error-block .error-header {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f76868;
+            margin-bottom: 8px;
+        }
+        .error-block .error-content {
+            color: var(--tg-text);
+            font-size: 14px;
+        }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255,255,255,0.2);
+            border-top-color: #00b080;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Задание 2</h1>
+        </div>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div>Загрузка данных...</div>
+            </div>
+        </div>
+
+        <button type="button" class="btn-select" id="btn-select">Выбрать сотрудника</button>
+    </div>
+
+<script>
+// === Telegram WebApp ===
+const tg = window.Telegram?.WebApp;
+if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
+}
+
+// === Конфигурация NocoDB ===
+const NOCODB_URL = 'https://nocodb.puzzlebot.top';
+const API_TOKEN = (() => {
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken) return urlToken;
+    return 'lnQf472yizYYT7mBbvnRNpg3UYBy5jzhMoECC_00';
+})();
+
+// Статусы
+const STATUS_CHECKED = 'Пройдена';
+const STATUS_AWAITING = 'На проверке';
+const STATUS_FIXING = 'Исправляет';
+
+// Тестовый режим (?test=1) — показать mock-данные
+const TEST_MODE = new URLSearchParams(window.location.search).get('test') === '1';
+const MOCK_DATA = {
+    [STATUS_CHECKED]: [{ fio: 'Ухова Екатерина' }],
+    [STATUS_AWAITING]: [{ fio: 'Михайлов Алексей Сергеевич' }, { fio: 'Кадочкин Максим' }],
+    [STATUS_FIXING]: [],
+    other: []
+};
+
+function shortName(fio) {
+    const parts = String(fio).trim().split(/\s+/).filter(x => x);
+    if (parts.length >= 2) return parts[1] + ' ' + parts[0][0].toUpperCase() + '.';
+    return fio;
+}
+
+// Нормализация значения статуса (Пройдена, На проверке, Исправляет и т.д.)
+function normalizeStatus(val) {
+    if (!val) return null;
+    const v = String(val).trim().toLowerCase();
+    if (v.includes('пройден') || (v.includes('проверено') && !v.includes('на проверке') && !v.includes('ждут'))) return STATUS_CHECKED;
+    if (v.includes('на проверке') || v.includes('ждут') || v.includes('ожида')) return STATUS_AWAITING;
+    if (v.includes('исправля')) return STATUS_FIXING;
+    if (v === 'проверено' || v === 'пройдена') return STATUS_CHECKED;
+    if (v === 'на проверке' || v === 'ждут проверку') return STATUS_AWAITING;
+    if (v === 'исправляет' || v === 'исправляют ошибки') return STATUS_FIXING;
+    return val;
+}
+
+// Поиск поля статуса в записи. Приоритет: "Статус практики" > другие поля со "статус"
+function findStatusField(record) {
+    const keys = Object.keys(record);
+    const getVal = (k) => {
+        let val = record[k];
+        if (val == null) return '';
+        if (typeof val === 'object' && (val.title || val.Title)) val = val.title || val.Title;
+        return String(val).trim();
+    };
+    // 1. Сначала ищем "Статус практики" — основной источник
+    for (const k of keys) {
+        if (k.toLowerCase().includes('статус') && k.toLowerCase().includes('практики')) {
+            const s = getVal(k);
+            if (s) return normalizeStatus(s);
+        }
+    }
+    // 2. Затем другие поля со "статус"
+    for (const k of keys) {
+        const lower = k.toLowerCase();
+        if ((lower.includes('статус') || lower === 'status') && !lower.includes('практики')) {
+            const s = getVal(k);
+            if (s) return normalizeStatus(s);
+        }
+    }
+    return null;
+}
+
+// Поиск ФИО в записи (NocoDB может вернуть linked: { title: "ФИО" })
+function findFioField(record) {
+    let fio = record['ФИО сотрудника'] || record['ФИО'] || '';
+    if (!fio) {
+        for (const k of Object.keys(record)) {
+            if (k.toLowerCase().includes('фио') && !k.toLowerCase().includes('тренер')) {
+                fio = record[k] || '';
+                if (fio) break;
+            }
+        }
+    }
+    if (fio != null && typeof fio === 'object') fio = fio.title || fio.Title || '';
+    return String(fio || '').trim();
+}
+
+async function loadData() {
+    if (TEST_MODE) {
+        render(MOCK_DATA, {});
+        return;
+    }
+    try {
+        const headers = { 'xc-token': API_TOKEN, 'Authorization': 'Bearer ' + API_TOKEN };
+
+        // 1. Проекты
+        const projRes = await fetch(NOCODB_URL + '/api/v1/db/meta/projects', { headers });
+        if (projRes.status === 401) {
+            throw new Error('Ошибка авторизации NocoDB (401). Проверьте API токен в настройках базы.');
+        }
+        if (!projRes.ok) {
+            throw new Error('NocoDB: ' + projRes.status + ' ' + projRes.statusText);
+        }
+        const projData = await projRes.json();
+        const projects = projData.list || [];
+        if (!projects.length) {
+            throw new Error('Проекты не найдены. Убедитесь, что токен даёт доступ к базе.');
+        }
+        const projectId = projects.find(p => (p.title || '').toLowerCase().includes('телеграм'))?.id || projects[0]?.id;
+        if (!projectId) throw new Error('Проект не найден');
+
+        // 2. Таблицы
+        const tabRes = await fetch(NOCODB_URL + '/api/v1/db/meta/projects/' + projectId + '/tables', { headers });
+        const tables = (await tabRes.json()).list || [];
+
+        const tableDay1 = tables.find(t => t.title === 'День 1' || t.title === 'День1');
+        const tableEmp = tables.find(t => t.title === 'Сотрудники' || t.title === 'сотрудники');
+
+        // Приоритет: статус в "День 1", если нет — в "Сотрудники"
+        let records = [];
+        if (tableDay1) {
+            const r = await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + projectId + '/' + tableDay1.id + '?limit=500', { headers });
+            const data = await r.json();
+            records = data.list || [];
+        }
+
+        // Загружаем сотрудников для филиалов и статусов (если в День 1 нет статуса)
+        const empRecords = [];
+        if (tableEmp) {
+            const r = await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + projectId + '/' + tableEmp.id + '?limit=500', { headers });
+            const data = await r.json();
+            empRecords.push(...(data.list || []));
+        }
+
+        const filialMap = {};
+        empRecords.forEach(emp => {
+            const fio = findFioField(emp);
+            const filial = emp['Филиал сотрудника'] || emp['Филиал'] || emp['Филиал сотрудника'] || '';
+            if (fio && filial) filialMap[fio] = String(filial).trim();
+        });
+
+        // Собираем сотрудников со статусами
+        const byStatus = {
+            [STATUS_CHECKED]: [],
+            [STATUS_AWAITING]: [],
+            [STATUS_FIXING]: [],
+            other: []
+        };
+
+        const seenFio = new Set();
+
+        function fioKey(f) {
+            return String(f).toLowerCase().split(/\s+/).filter(x => x).sort().join(' ');
+        }
+        function addEmployee(fio, status, filial) {
+            if (!fio) return;
+            const key = fioKey(fio);
+            if (seenFio.has(key)) return;
+            seenFio.add(key);
+            const item = { fio, filial: filial || filialMap[fio] || '' };
+            if (status === STATUS_CHECKED) byStatus[STATUS_CHECKED].push(item);
+            else if (status === STATUS_AWAITING) byStatus[STATUS_AWAITING].push(item);
+            else if (status === STATUS_FIXING) byStatus[STATUS_FIXING].push(item);
+            else byStatus.other.push({ ...item, rawStatus: status });
+        }
+
+        records.forEach(r => {
+            const fio = findFioField(r);
+            let status = null;
+            const filial = r['Филиал сотрудника'] || r['Филиал'] || filialMap[fio] || '';
+            // Приоритет: "Статус практики" из Сотрудники > статус из День 1
+            if (tableEmp) {
+                const fk = fioKey(fio);
+                const emp = empRecords.find(e => fioKey(findFioField(e)) === fk);
+                if (emp) status = findStatusField(emp);
+            }
+            if (!status) status = findStatusField(r);
+            addEmployee(fio, status, filial);
+        });
+
+        empRecords.forEach(emp => {
+            const fio = findFioField(emp);
+            if (!fio || seenFio.has(fioKey(fio))) return;
+            const status = findStatusField(emp);
+            addEmployee(fio, status, emp['Филиал сотрудника'] || emp['Филиал'] || '');
+        });
+
+        render(byStatus, filialMap);
+
+    } catch (e) {
+        console.error('Ошибка:', e);
+        document.getElementById('content').innerHTML =
+            '<div class="error-block">' +
+            '<div class="error-header"><span>⚠️</span><span>Ошибка загрузки</span></div>' +
+            '<div class="error-content">' + (e.message || 'Не удалось загрузить данные') + '</div>' +
+            '</div>';
+    }
+}
+
+function buildBlock(className, title, items) {
+    let html = '<div class="status-block ' + className + '">';
+    html += '<div class="status-title">' + title + '</div>';
+    html += '<div class="status-employees">';
+    if (items.length) {
+        items.forEach((item, i) => {
+            html += '<span class="emp-line">' + (i + 1) + '. ' + (item.fio || item) + '</span>';
+        });
+    }
+    html += '</div></div>';
+    return html;
+}
+
+function render(byStatus, filialMap) {
+    const content = document.getElementById('content');
+    const checked = byStatus[STATUS_CHECKED] || [];
+    const awaiting = byStatus[STATUS_AWAITING] || [];
+    const fixing = byStatus[STATUS_FIXING] || [];
+    const other = byStatus.other || [];
+    const total = checked.length + awaiting.length + fixing.length + other.length;
+
+    if (total === 0) {
+        content.innerHTML = '<div class="error-block"><div class="error-header">Нет данных</div><div class="error-content">Нет данных о сотрудниках</div></div>';
+        return;
+    }
+
+    let html = '';
+    html += buildBlock('checked', 'Пройдена', checked);
+    html += buildBlock('awaiting', 'На проверке', awaiting);
+    html += buildBlock('fixing', 'Исправляет', fixing);
+    if (other.length) html += buildBlock('fixing', 'Ещё не выполнили', other);
+
+    content.innerHTML = html;
+}
+
+loadData();
+setInterval(loadData, 60000);
+
+document.getElementById('btn-select').addEventListener('click', function() {
+    if (window.Telegram?.WebApp) window.Telegram.WebApp.close(); else alert('Выбор сотрудника — функция в разработке');
+});
+</script>
+</body>
+</html>
