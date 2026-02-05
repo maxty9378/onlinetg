@@ -7,14 +7,14 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --tg-bg: var(--tg-theme-bg-color, #0a0a0a);
+            --tg-bg: #000000;
             --tg-text: var(--tg-theme-text-color, #ffffff);
             --tg-hint: var(--tg-theme-hint-color, #8e8e93);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body {
+        html, body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-bg);
+            background: #000000;
             color: var(--tg-text);
             min-height: 100vh;
             overflow-x: hidden;
@@ -93,8 +93,8 @@
             display: none;
         }
 
-        /* Кнопка Выбрать сотрудника */
-        .btn-select {
+        /* Кнопки */
+        .btn-select, .btn-next, .btn-back, .btn-complete, .btn-incomplete {
             display: block;
             width: 100%;
             background: #00b080;
@@ -105,10 +105,71 @@
             font-size: 16px;
             font-weight: 600;
             text-align: center;
-            margin-top: 20px;
+            margin-top: 12px;
             cursor: pointer;
         }
-        .btn-select:active { opacity: 0.9; }
+        .btn-select:active, .btn-next:active, .btn-complete:active, .btn-incomplete:active { opacity: 0.9; }
+        .btn-back { background: #2c2c2e; margin-top: 8px; }
+        .btn-incomplete { background: #5c2f32; }
+        .btn-complete { background: #2d554a; }
+
+        /* Список выбора сотрудника */
+        .emp-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2c2c2e;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .emp-list-item:active { opacity: 0.9; }
+        .emp-list-item .name { font-size: 16px; font-weight: 500; }
+        .emp-list-item .arrow { color: var(--tg-hint); font-size: 18px; }
+
+        /* Экран деталей */
+        .detail-card {
+            background: #2c2c2e;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .detail-row { margin-bottom: 12px; font-size: 15px; }
+        .detail-row .label { color: var(--tg-hint); font-size: 12px; margin-bottom: 2px; }
+        .detail-row .value { font-weight: 500; }
+        .detail-row a { color: #4da6ff; text-decoration: none; }
+        .detail-photo { max-width: 100%; border-radius: 8px; margin-top: 8px; display: block; }
+        .btn-open-photo {
+            display: inline-block; margin-top: 10px; padding: 10px 16px; background: rgba(77, 166, 255, 0.2);
+            color: #4da6ff; border-radius: 10px; font-size: 14px; font-weight: 500; text-decoration: none;
+        }
+        .btn-open-photo:active { opacity: 0.9; }
+        .comment-area {
+            width: 100%;
+            min-height: 80px;
+            background: #1c1c1e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 12px;
+            color: var(--tg-text);
+            font-size: 15px;
+            margin-top: 8px;
+        }
+        .rating-stars { display: flex; gap: 12px; margin: 16px 0; justify-content: center; }
+        .rating-stars button {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: #2c2c2e;
+            border: 2px solid rgba(255,255,255,0.2);
+            color: var(--tg-text);
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .rating-stars button.active { background: #ffaa00; border-color: #ffaa00; color: #000; }
+        .rating-stars button:active { opacity: 0.9; }
 
         .loading {
             text-align: center;
@@ -143,19 +204,39 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1 class="title">Задание 2</h1>
-        </div>
-
+    <div class="container" id="screen-main">
         <div id="content">
-            <div class="loading">
-                <div class="spinner"></div>
-                <div>Загрузка данных...</div>
-            </div>
+            <div class="loading"><div class="spinner"></div><div>Загрузка данных...</div></div>
         </div>
-
         <button type="button" class="btn-select" id="btn-select">Выбрать сотрудника</button>
+    </div>
+
+    <div class="container" id="screen-select" style="display:none;">
+        <div class="header">
+            <h1 class="title">Выберите сотрудника из списка</h1>
+        </div>
+        <div id="emp-list"></div>
+        <button type="button" class="btn-next" id="btn-select-back">← Назад</button>
+    </div>
+
+    <div class="container" id="screen-detail" style="display:none;">
+        <div class="header">
+            <h1 class="title">Карточка сотрудника</h1>
+        </div>
+        <div id="detail-content"></div>
+        <div style="margin-top:16px;">
+            <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Задание</div>
+            <button type="button" class="btn-complete" id="btn-complete">Выполнено</button>
+            <button type="button" class="btn-incomplete" id="btn-incomplete">Не выполнено</button>
+            <div style="margin-top:12px;font-size:13px;color:var(--tg-hint);">Комментарий</div>
+            <textarea class="comment-area" id="comment" placeholder="Написать комментарий..."></textarea>
+        </div>
+        <div id="rating-block" style="display:none;margin-top:16px;">
+            <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Оценка (1–5)</div>
+            <div class="rating-stars" id="rating-stars"></div>
+            <button type="button" class="btn-next" id="btn-save">Сохранить</button>
+        </div>
+        <button type="button" class="btn-back" id="btn-detail-back" style="margin-top:12px;">← Назад</button>
     </div>
 
 <script>
@@ -179,6 +260,10 @@ const API_TOKEN = (() => {
 const STATUS_CHECKED = 'Пройдена';
 const STATUS_AWAITING = 'На проверке';
 const STATUS_FIXING = 'Исправляет';
+const STATUS_DONE = 'Выполнено';
+
+// Глобальное состояние
+let GLOBAL = { projectId: null, tableDay1Id: null, tableEmpId: null, records: [], empRecords: [], byStatus: null };
 
 // Тестовый режим (?test=1) — показать mock-данные
 const TEST_MODE = new URLSearchParams(window.location.search).get('test') === '1';
@@ -235,6 +320,45 @@ function findStatusField(record) {
     return null;
 }
 
+// Извлечение табельного номера
+function findTabNomer(record) {
+    const k = Object.keys(record).find(x => /tab|табельн/i.test(x));
+    if (k) { const v = record[k]; return v != null ? String(v) : ''; }
+    return record['Tab_nomer'] || record['Tab_n'] || record['Табельный номер'] || '';
+}
+
+// Извлечение ссылки на файл
+function findFileLink(record) {
+    const keys = Object.keys(record);
+    for (const k of keys) {
+        const l = k.toLowerCase();
+        if (l.includes('файл') || l.includes('ссылка') || l.includes('link') || l.includes('url')) {
+            let v = record[k];
+            if (v == null) continue;
+            if (typeof v === 'object' && v.url) return v.url;
+            if (typeof v === 'string' && v.startsWith('http')) return v;
+        }
+    }
+    return '';
+}
+
+// Извлечение картинки den1_2_foto (attachment: [{ url }])
+function findPhotoUrl(record) {
+    let v = record['den1_2_foto'] || record['Den1_2_foto'] || record['den1_2_foto'] || '';
+    if (v && Array.isArray(v) && v[0] && v[0].url) return v[0].url;
+    if (v && typeof v === 'object' && v.url) return v.url;
+    if (v && typeof v === 'string' && v.startsWith('http')) return v;
+    for (const k of Object.keys(record)) {
+        if (/den1|фото|photo|img/i.test(k)) {
+            v = record[k];
+            if (Array.isArray(v) && v[0]?.url) return v[0].url;
+            if (v?.url) return v.url;
+            if (typeof v === 'string' && v.startsWith('http')) return v;
+        }
+    }
+    return '';
+}
+
 // Поиск ФИО в записи (NocoDB может вернуть linked: { title: "ФИО" })
 function findFioField(record) {
     let fio = record['ФИО сотрудника'] || record['ФИО'] || '';
@@ -252,6 +376,18 @@ function findFioField(record) {
 
 async function loadData() {
     if (TEST_MODE) {
+        GLOBAL.byStatus = MOCK_DATA;
+        GLOBAL.records = [{ Id: 1 }];
+        GLOBAL.empRecords = [{ Id: 1 }];
+        GLOBAL.projectId = 'p1'; GLOBAL.tableDay1Id = 't1'; GLOBAL.tableEmpId = 't2';
+        MOCK_DATA[STATUS_AWAITING][0].day1RecordId = 1;
+        MOCK_DATA[STATUS_AWAITING][0].empRecordId = 1;
+        MOCK_DATA[STATUS_AWAITING][0].tabNomer = '123';
+        MOCK_DATA[STATUS_AWAITING][0].fileLink = 'https://example.com/file.pdf';
+        MOCK_DATA[STATUS_AWAITING][0].photoUrl = '';
+        MOCK_DATA[STATUS_AWAITING][1].day1RecordId = 2; MOCK_DATA[STATUS_AWAITING][1].empRecordId = 2;
+        MOCK_DATA[STATUS_AWAITING][1].tabNomer = ''; MOCK_DATA[STATUS_AWAITING][1].fileLink = '';
+        MOCK_DATA[STATUS_AWAITING][1].photoUrl = '';
         render(MOCK_DATA, {});
         return;
     }
@@ -278,10 +414,12 @@ async function loadData() {
         const tabRes = await fetch(NOCODB_URL + '/api/v1/db/meta/projects/' + projectId + '/tables', { headers });
         const tables = (await tabRes.json()).list || [];
 
-        const tableDay1 = tables.find(t => t.title === 'День 1' || t.title === 'День1');
+        const tableDay1 = tables.find(t => t.title === 'День 1' || t.title === 'День1' || (t.title || '').includes('День 1'));
         const tableEmp = tables.find(t => t.title === 'Сотрудники' || t.title === 'сотрудники');
+        GLOBAL.projectId = projectId;
+        GLOBAL.tableDay1Id = tableDay1?.id;
+        GLOBAL.tableEmpId = tableEmp?.id;
 
-        // Приоритет: статус в "День 1", если нет — в "Сотрудники"
         let records = [];
         if (tableDay1) {
             const r = await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + projectId + '/' + tableDay1.id + '?limit=500', { headers });
@@ -317,39 +455,57 @@ async function loadData() {
         function fioKey(f) {
             return String(f).toLowerCase().split(/\s+/).filter(x => x).sort().join(' ');
         }
-        function addEmployee(fio, status, filial) {
+        function addEmployee(fio, status, filial, extra) {
             if (!fio) return;
             const key = fioKey(fio);
             if (seenFio.has(key)) return;
             seenFio.add(key);
-            const item = { fio, filial: filial || filialMap[fio] || '' };
+            const item = { fio, filial: filial || filialMap[fio] || '', ...extra };
             if (status === STATUS_CHECKED) byStatus[STATUS_CHECKED].push(item);
             else if (status === STATUS_AWAITING) byStatus[STATUS_AWAITING].push(item);
             else if (status === STATUS_FIXING) byStatus[STATUS_FIXING].push(item);
             else byStatus.other.push({ ...item, rawStatus: status });
         }
 
+        GLOBAL.records = records;
+        GLOBAL.empRecords = empRecords;
+
         records.forEach(r => {
             const fio = findFioField(r);
             let status = null;
             const filial = r['Филиал сотрудника'] || r['Филиал'] || filialMap[fio] || '';
-            // Приоритет: "Статус практики" из Сотрудники > статус из День 1
             if (tableEmp) {
                 const fk = fioKey(fio);
                 const emp = empRecords.find(e => fioKey(findFioField(e)) === fk);
                 if (emp) status = findStatusField(emp);
             }
             if (!status) status = findStatusField(r);
-            addEmployee(fio, status, filial);
+            const extra = status === STATUS_AWAITING ? {
+                day1RecordId: r.Id,
+                empRecordId: (() => { const emp = empRecords.find(e => fioKey(findFioField(e)) === fioKey(fio)); return emp?.Id; })(),
+                tabNomer: findTabNomer(r),
+                fileLink: findFileLink(r),
+                photoUrl: findPhotoUrl(r)
+            } : {};
+            addEmployee(fio, status, filial, extra);
         });
 
         empRecords.forEach(emp => {
             const fio = findFioField(emp);
             if (!fio || seenFio.has(fioKey(fio))) return;
             const status = findStatusField(emp);
-            addEmployee(fio, status, emp['Филиал сотрудника'] || emp['Филиал'] || '');
+            const r = records.find(rec => fioKey(findFioField(rec)) === fioKey(fio));
+            const extra = status === STATUS_AWAITING && r ? {
+                day1RecordId: r.Id,
+                empRecordId: emp.Id,
+                tabNomer: findTabNomer(r) || findTabNomer(emp),
+                fileLink: findFileLink(r),
+                photoUrl: findPhotoUrl(r)
+            } : {};
+            addEmployee(fio, status, emp['Филиал сотрудника'] || emp['Филиал'] || '', extra);
         });
 
+        GLOBAL.byStatus = byStatus;
         render(byStatus, filialMap);
 
     } catch (e) {
@@ -405,12 +561,133 @@ function render(byStatus, filialMap) {
     });
 }
 
-loadData();
-setInterval(loadData, 60000);
+// === Навигация экранов ===
+let selectedEmployee = null;
+
+function showScreen(id) {
+    ['screen-main','screen-select','screen-detail'].forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
+}
+
+function showSelectScreen() {
+    const awaiting = GLOBAL.byStatus?.[STATUS_AWAITING] || [];
+    const list = document.getElementById('emp-list');
+    if (!awaiting.length) {
+        list.innerHTML = '<div class="error-block"><div class="error-content">Нет сотрудников на проверке</div></div>';
+    } else {
+        list.innerHTML = awaiting.map((e, i) =>
+            '<div class="emp-list-item" data-i="' + i + '"><span class="name">' + (e.fio || '') + '</span><span class="arrow">›</span></div>'
+        ).join('');
+        list.querySelectorAll('.emp-list-item').forEach(el => {
+            el.addEventListener('click', () => {
+                selectedEmployee = awaiting[parseInt(el.dataset.i)];
+                showDetailScreen();
+            });
+        });
+    }
+    showScreen('screen-select');
+}
+
+function showDetailScreen() {
+    if (!selectedEmployee) return;
+    const e = selectedEmployee;
+    let html = '<div class="detail-card">';
+    html += '<div class="detail-row"><div class="label">ФИО</div><div class="value">' + (e.fio || '—') + '</div></div>';
+    html += '<div class="detail-row"><div class="label">Табельный номер</div><div class="value">' + (e.tabNomer || '—') + '</div></div>';
+    if (e.fileLink) html += '<div class="detail-row"><div class="label">Файл</div><div class="value"><a href="' + e.fileLink + '" target="_blank" rel="noopener">Открыть в браузере</a></div></div>';
+    if (e.photoUrl) html += '<div class="detail-row"><div class="label">Прикреплённый файл</div><img class="detail-photo" src="' + e.photoUrl + '" alt=""/><a href="' + e.photoUrl + '" target="_blank" rel="noopener" class="btn-open-photo" data-url="' + e.photoUrl + '">Открыть в браузере</a></div>';
+    html += '</div>';
+    document.getElementById('detail-content').innerHTML = html;
+    document.querySelectorAll('.btn-open-photo').forEach(a => {
+        a.addEventListener('click', function(ev) {
+            if (window.Telegram?.WebApp?.openLink) {
+                ev.preventDefault();
+                window.Telegram.WebApp.openLink(this.href);
+            }
+        });
+    });
+    document.getElementById('comment').value = '';
+    document.getElementById('rating-block').style.display = 'none';
+    document.getElementById('rating-stars').innerHTML = [1,2,3,4,5].map(n => '<button type="button" data-r="' + n + '">' + n + '</button>').join('');
+    let selRating = 0;
+    document.getElementById('rating-stars').querySelectorAll('button').forEach(b => {
+        b.addEventListener('click', () => {
+            selRating = parseInt(b.dataset.r);
+            document.querySelectorAll('#rating-stars button').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+        });
+    });
+    document.getElementById('btn-save').onclick = () => saveCompleted(selRating);
+    showScreen('screen-detail');
+}
+
+async function saveCompleted(rating) {
+    if (!rating || rating < 1 || rating > 5) { alert('Выберите оценку от 1 до 5'); return; }
+    const comment = document.getElementById('comment').value.trim();
+    const headers = { 'xc-token': API_TOKEN, 'Authorization': 'Bearer ' + API_TOKEN, 'Content-Type': 'application/json' };
+    const sample = GLOBAL.records[0] || GLOBAL.empRecords[0] || {};
+    const statusKey = Object.keys(sample).find(k => /статус/i.test(k) && /практик/i.test(k)) || 'Статус практики';
+    const ratingKey = Object.keys(sample).find(k => /оценка|rating|балл/i.test(k)) || 'Оценка';
+    const commentKey = Object.keys(sample).find(k => /коммент|comment/i.test(k)) || 'Комментарий';
+    const update = { [statusKey]: STATUS_CHECKED, [ratingKey]: rating };
+    if (comment) update[commentKey] = comment;
+    try {
+        if (selectedEmployee.day1RecordId && GLOBAL.tableDay1Id && GLOBAL.projectId) {
+            await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + GLOBAL.projectId + '/' + GLOBAL.tableDay1Id + '/' + selectedEmployee.day1RecordId, {
+                method: 'PATCH', headers, body: JSON.stringify(update)
+            });
+        }
+        if (selectedEmployee.empRecordId && GLOBAL.tableEmpId && GLOBAL.projectId) {
+            const empUpdate = {}; empUpdate[statusKey] = STATUS_CHECKED; if (comment) empUpdate[commentKey] = comment;
+            await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + GLOBAL.projectId + '/' + GLOBAL.tableEmpId + '/' + selectedEmployee.empRecordId, {
+                method: 'PATCH', headers, body: JSON.stringify(empUpdate)
+            });
+        }
+        alert('Сохранено');
+        selectedEmployee = null;
+        loadData();
+        showScreen('screen-main');
+    } catch (err) {
+        alert('Ошибка сохранения: ' + (err.message || ''));
+    }
+}
+
+async function saveIncomplete() {
+    const comment = document.getElementById('comment').value.trim();
+    if (!comment) { alert('Напишите комментарий'); return; }
+    const headers = { 'xc-token': API_TOKEN, 'Authorization': 'Bearer ' + API_TOKEN, 'Content-Type': 'application/json' };
+    const sample = GLOBAL.records[0] || GLOBAL.empRecords[0] || {};
+    const commentKey = Object.keys(sample).find(k => /коммент|comment/i.test(k)) || 'Комментарий';
+    const update = { [commentKey]: comment };
+    try {
+        if (selectedEmployee.day1RecordId && GLOBAL.tableDay1Id && GLOBAL.projectId) {
+            await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + GLOBAL.projectId + '/' + GLOBAL.tableDay1Id + '/' + selectedEmployee.day1RecordId, {
+                method: 'PATCH', headers, body: JSON.stringify(update)
+            });
+        }
+        if (selectedEmployee.empRecordId && GLOBAL.tableEmpId && GLOBAL.projectId) {
+            await fetch(NOCODB_URL + '/api/v1/db/data/noco/' + GLOBAL.projectId + '/' + GLOBAL.tableEmpId + '/' + selectedEmployee.empRecordId, {
+                method: 'PATCH', headers, body: JSON.stringify(update)
+            });
+        }
+        alert('Сохранено');
+        selectedEmployee = null;
+        loadData();
+        showScreen('screen-main');
+    } catch (err) {
+        alert('Ошибка: ' + (err.message || ''));
+    }
+}
 
 document.getElementById('btn-select').addEventListener('click', function() {
-    if (window.Telegram?.WebApp) window.Telegram.WebApp.close(); else alert('Выбор сотрудника — функция в разработке');
+    showSelectScreen();
 });
+document.getElementById('btn-select-back').addEventListener('click', () => showScreen('screen-main'));
+document.getElementById('btn-detail-back').addEventListener('click', () => showScreen('screen-select'));
+document.getElementById('btn-complete').addEventListener('click', () => document.getElementById('rating-block').style.display = 'block');
+document.getElementById('btn-incomplete').addEventListener('click', saveIncomplete);
+
+loadData();
+setInterval(loadData, 60000);
 </script>
 </body>
 </html>
