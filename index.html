@@ -33,7 +33,7 @@
             color: var(--tg-text);
         }
 
-        /* Блоки статусов — как в макете */
+        /* Блоки статусов */
         .status-block {
             border-radius: 12px;
             padding: 16px;
@@ -51,6 +51,12 @@
             background: #614a2d;
         }
         .status-block.fixing .status-title { color: #ffaa00; }
+        /* Ещё не выполнили — тёмный Telegram-стиль */
+        .status-block.other {
+            background: #242f3d;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .status-block.other .status-title { color: #8e8e93; }
         .status-title {
             font-size: 15px;
             font-weight: 600;
@@ -66,6 +72,26 @@
             margin-bottom: 4px;
         }
         .status-employees .emp-line:last-child { margin-bottom: 0; }
+
+        /* Сворачиваемый блок */
+        .status-block.collapsible .status-title {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-block.collapsible .status-title::after {
+            content: '▼';
+            font-size: 12px;
+            opacity: 0.7;
+            transition: transform 0.2s;
+        }
+        .status-block.collapsible.collapsed .status-title::after {
+            transform: rotate(-90deg);
+        }
+        .status-block.collapsible.collapsed .status-employees {
+            display: none;
+        }
 
         /* Кнопка Выбрать сотрудника */
         .btn-select {
@@ -336,9 +362,11 @@ async function loadData() {
     }
 }
 
-function buildBlock(className, title, items) {
-    let html = '<div class="status-block ' + className + '">';
-    html += '<div class="status-title">' + title + '</div>';
+function buildBlock(className, title, items, collapsed) {
+    const cls = 'status-block ' + className + (collapsed ? ' collapsible collapsed' : '');
+    let html = '<div class="' + cls + '">';
+    const count = collapsed && items.length ? ' (' + items.length + ')' : '';
+    html += '<div class="status-title">' + title + count + '</div>';
     html += '<div class="status-employees">';
     if (items.length) {
         items.forEach((item, i) => {
@@ -366,9 +394,15 @@ function render(byStatus, filialMap) {
     html += buildBlock('checked', 'Пройдена', checked);
     html += buildBlock('awaiting', 'На проверке', awaiting);
     html += buildBlock('fixing', 'Исправляет', fixing);
-    if (other.length) html += buildBlock('fixing', 'Ещё не выполнили', other);
+    if (other.length) html += buildBlock('other', 'Ещё не выполнили', other, true);
 
     content.innerHTML = html;
+
+    document.querySelectorAll('.status-block.collapsible .status-title').forEach(el => {
+        el.addEventListener('click', function() {
+            this.closest('.status-block').classList.toggle('collapsed');
+        });
+    });
 }
 
 loadData();
